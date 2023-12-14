@@ -23,3 +23,4 @@ go.work
 *.idea
 *.air.toml
 *tmp
+*bin

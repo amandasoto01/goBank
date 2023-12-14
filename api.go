@@ -29,12 +29,49 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
+	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin))
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
 	router.HandleFunc("/account/{id}", withJWTAuth(makeHTTPHandleFunc(s.handleGetAccountByID), s.store))
 	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransferAccount))
 
 	log.Println("JSON API server running on port: ", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
+}
+
+// acc id 865
+func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
+	if r.Method != "POST" {
+		return fmt.Errorf("Method not allowed %s ", r.Method)
+	}
+
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return err
+	}
+
+	acc, err := s.store.GetAccountByNumber(int(req.Number))
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Account: \n", acc)
+
+	if !acc.ValidPassword(req.Password) {
+		fmt.Errorf("not authenticated")
+	}
+
+	token, err := createJWT(acc)
+	if err != nil {
+		return err
+	}
+
+	response := LoginResponse{
+		Number: acc.Number,
+		Token:  token,
+	}
+
+	return writeJSON(w, http.StatusOK, response)
 }
 
 // good practice prefix with handle
@@ -93,20 +130,17 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 
-	account := NewAccount(accountRequest.FirstName, accountRequest.LastName)
+	account, err := NewAccount(accountRequest.FirstName, accountRequest.LastName, accountRequest.Password)
+
+	if err != nil {
+		return err
+	}
 
 	if err := s.store.CreateAccount(account); err != nil {
 		return err
 
 	}
 
-	tokenString, err := createJWT(account)
-
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("token: ", tokenString)
 	return writeJSON(w, http.StatusOK, account)
 }
 
