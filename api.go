@@ -58,7 +58,7 @@ func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	fmt.Println("Account: \n", acc)
 
 	if !acc.ValidPassword(req.Password) {
-		fmt.Errorf("not authenticated")
+		return fmt.Errorf("not authenticated")
 	}
 
 	token, err := createJWT(acc)
